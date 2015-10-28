@@ -5,7 +5,7 @@ if ($MyInvocation.MyCommand.Path) {
     $currdir = $pwd -replace '^\S+::',''
 }
 
-import-module (join-path $currdir flancy.psd1)
+import-module (join-path $currdir flancy.psd1) -Force
 
 $url = "http://localhost:8001"
 
@@ -15,13 +15,21 @@ new-flancy -url $url -webschema @(
         method = 'Get' #currently case sensitive
         script = { "Welcome to Flancy!" }
     },@{
-        path   = '/processes'
+        path   = '/process'
         method = 'Get' #currently case sensitive
         script = { 
-            $processes = Get-Process
-            $processes |select name, id |convertto-json
+            Get-Process | ConvertTo-Json
+        }
+    },@{
+        path   = '/process'
+        method = 'Post' #currently case sensitive
+        script = { 
+            $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
+            Start-Process $processname
         }
     }
 )
 
-start $url
+Invoke-RestMethod -Uri http://localhost:8001/process -Headers @{'Accept'='application/json';'Content-Type'='application/json'}
+
+Invoke-RestMethod -Uri http://localhost:8001/process -Method Post -Body "Notepad" -Headers @{'Accept'='application/json'}
