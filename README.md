@@ -1,6 +1,6 @@
 # Flancy - A web microframework for Windows PowerShell
 
-Flancy comes from combing Flask (python web microframework) and Nancy (the .NET microframework libraries used by this module).  Flask + Nancy = Flancy!
+Flancy comes from combing Flask (python web microframework) and [Nancy](http://nancyfx.org/) (the .NET microframework libraries used by this module).  Flask + Nancy = Flancy!
 
 ## What is PowerShell?
 An interpreted language created by Microsoft that is built on and taps into the .NET framework.
@@ -29,6 +29,8 @@ new-flancy -url $url -webschema @(
     }
 )
 ```
+
+One thing to note:  Because of the way that Nancy works, I cannot create new custom types on subsequent New-Flancy requests.  This means that in order to make a change to your service, you'll need to restart your PowerShell session.  Another option is to start them in jobs in order to get clean sessions without restarting.
 
 # What's Next
 A ton - I know there's a ton of bugs and things to think about.  Start logging issues and feel free to contribute (including writing tests) via pull request.  I have to figure out ways to handle posts, puts, deal with aut, etc.
