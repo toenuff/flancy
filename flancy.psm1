@@ -49,7 +49,8 @@ namespace Flancy {
 "@
     $routes = ''
     foreach ($entry in $webschema) {
-        $routes += "`r`n$($entry.method)[`"$($entry.path)`"] = _ => "
+        $method = (Get-Culture).TextInfo.ToTitleCase($entry.method)
+        $routes += "`r`n$method[`"$($entry.path)`"] = _ => "
         $routes += "{try {"
         $routes += ($MethodBody -f ($entry.script -replace '"', '""'))
         $routes += "} catch (System.Exception ex) { return ex.Message; }"

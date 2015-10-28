@@ -12,17 +12,17 @@ $url = "http://localhost:8001"
 new-flancy -url $url -webschema @(
     @{
         path   = '/'
-        method = 'Get' #currently case sensitive
+        method = 'get'
         script = { "Welcome to Flancy!" }
     },@{
         path   = '/process'
-        method = 'Get' #currently case sensitive
+        method = 'get'
         script = { 
             Get-Process | ConvertTo-Json
         }
     },@{
         path   = '/process'
-        method = 'Post' #currently case sensitive
+        method = 'post'
         script = { 
             $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
             Start-Process $processname
