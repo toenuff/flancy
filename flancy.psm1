@@ -34,8 +34,6 @@ namespace Flancy {
     foreach ($entry in $webschema) {
         $routes += "`r`n$($entry.method)[`"$($entry.path)`"] = _ => "
         $routes += "{`r`n"
-        #$routes += "string command = `"gps |convertto-json`";`r`n";
-        #$routes += "string command = `"gps |convertto-json`";`r`n";
         $routes += "string command = @`"{0}`r`n`";`r`n" -f ($entry.script -replace '"', '""')
         $routes += 'this.shell.Commands.AddScript(command);'
         $routes += "`r`n"
@@ -49,7 +47,6 @@ namespace Flancy {
 "@
         $routes += 'return output;'
         $routes += "};`r`n"
-        #$code+='Get["/"] = parameters => "Suckit PowerShell World";'
     }
     $code += $routes
     $code+=@"
