@@ -28,6 +28,12 @@ new-flancy -url $url -webschema @(
             Start-Process $processname
         }
     },@{
+        path   = '/process/{name}'
+        method = 'get'
+        script = { 
+            get-process $parameters.name |convertto-json -depth 1
+        }
+    },@{
         path   = '/prettyprocess'
         method = 'get'
         script = { 
@@ -38,5 +44,6 @@ new-flancy -url $url -webschema @(
 
 Invoke-RestMethod -Uri http://localhost:8001/process -Headers @{'Accept'='application/json';'Content-Type'='application/json'}
 Invoke-RestMethod -Uri http://localhost:8001/process -Method Post -Body "Notepad" -Headers @{'Accept'='application/json'}
+Invoke-RestMethod -Uri http://localhost:8001/process/notepad 
 start http://localhost:8001
 start http://localhost:8001/prettyprocess
