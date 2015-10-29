@@ -1,5 +1,6 @@
 $nancydll = ([Nancy.NancyModule]).assembly.location
 $nancyselfdll = ([Nancy.Hosting.Self.NancyHost]).assembly.location
+$MicrosoftCSharp = "Microsoft.CSharp"
 
 
 $flancy = $null
@@ -15,11 +16,27 @@ function New-Flancy {
         throw "A flancy already exists.  To create a new one, you must restart your PowerShell session"
         break
     }
+
+    $MethodBody = '
+        string command = @"function RouteBody {{ param($Parameters, $Request) {0} }}";
+        this.shell.Commands.AddScript(command);
+        this.shell.Invoke();
+        this.shell.Commands.Clear(); 
+        this.shell.Commands.AddCommand("RouteBody").AddParameter("Parameters", _).AddParameter("Request", Request);
+        var output = string.Empty;
+        foreach(var item in this.shell.Invoke()) 
+        {{
+            output += item;
+        }}
+        return output;
+        '
+
     $code = @"
 using System;
 using System.Management.Automation;
 using Nancy;
 using Nancy.Hosting.Self;
+using Nancy.Extensions;
 
 namespace Flancy {
     public class Module : NancyModule
@@ -32,20 +49,11 @@ namespace Flancy {
 "@
     $routes = ''
     foreach ($entry in $webschema) {
-        $routes += "`r`n$($entry.method)[`"$($entry.path)`"] = _ => "
-        $routes += "{`r`n"
-        $routes += "string command = @`"{0}`r`n`";`r`n" -f ($entry.script -replace '"', '""')
-        $routes += 'this.shell.Commands.AddScript(command);'
-        $routes += "`r`n"
-        $routes += 'var results = this.shell.Invoke();'
-        $routes += "`r`n"
-        $routes += @"
-            var output = "";
-            foreach (var item in results) {
-                output += item;
-            }
-"@
-        $routes += 'return output;'
+        $method = (Get-Culture).TextInfo.ToTitleCase($entry.method)
+        $routes += "`r`n$method[`"$($entry.path)`"] = _ => "
+        $routes += "{try {"
+        $routes += ($MethodBody -f ($entry.script -replace '"', '""'))
+        $routes += "} catch (System.Exception ex) { return ex.Message; }"
         $routes += "};`r`n"
     }
     $code += $routes
@@ -71,7 +79,9 @@ namespace Flancy {
 }
 "@ 
 
-    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll)
+Write-Debug $code
+
+    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
     $flancy = new-object "flancy.flancy" -argumentlist $url
     try {
         $flancy.start()
