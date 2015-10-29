@@ -10,7 +10,8 @@ function New-Flancy {
         [Parameter(Position=0)]
         [string] $url='http://localhost:8000',
         [Parameter(Mandatory=$false)]
-        [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}})
+        [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}}),
+        [switch] $Passthru
     )
     if ($SCRIPT:flancy) {
         throw "A flancy already exists.  To create a new one, you must restart your PowerShell session"
@@ -87,7 +88,9 @@ Write-Debug $code
         $flancy.start()
         if ($flancy) {
             $SCRIPT:flancy = $flancy
-            $flancy
+            if ($Passthru) {
+                $flancy
+            }
         }
     } catch [Exception] {
         $_
@@ -114,8 +117,3 @@ function Stop-Flancy {
         throw "Flancy not found.  Did you successfully run New-Flancy?"
     }
 }
-
-### TODO
-### Should probably allow pipes from cmdlets and explicity flancy passing
-### HTTP methods are case sensitive - need to fix automatically if entered incorrectly
-### Consider validation on the webschema
