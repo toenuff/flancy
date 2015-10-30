@@ -71,8 +71,11 @@ namespace Flancy {
         private NancyHost host;
         private Uri uri;
         public Flancy(string url) {
+            var config = new HostConfiguration();
+            config.UrlReservations.CreateAutomatically = true;
+
             uri = new Uri(url);
-            this.host = new NancyHost(uri);
+            this.host = new NancyHost(config, uri);
         }
         public void Start() {
             this.host.Start();
