@@ -11,10 +11,15 @@ function New-Flancy {
         [string] $url='http://localhost:8000',
         [Parameter(Mandatory=$false)]
         [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}}),
-        [switch] $Passthru
+        [switch] $Passthru,
+        [switch] $Public
     )
     if ($SCRIPT:flancy) {
         throw "A flancy already exists.  To create a new one, you must restart your PowerShell session"
+        break
+    }
+    if (!$Public -and $url -notmatch '\/\/localhost:') {
+        throw "To specify a url other than localhost, you must use the -Public switch"
         break
     }
 
@@ -72,8 +77,16 @@ namespace Flancy {
         private Uri uri;
         public Flancy(string url) {
             var config = new HostConfiguration();
-            config.UrlReservations.CreateAutomatically = true;
+"@
+    if ($Public) {
+        $code+= "config.UrlReservations.CreateAutomatically = true;`r`n"
 
+    }
+    else {
+        $code+= "config.RewriteLocalhost = false;`r`n"
+        $code += "config.UrlReservations.User = System.Security.Principal.WindowsIdentity.GetCurrent().Name;`r`n"
+    }
+    $code += @"
             uri = new Uri(url);
             this.host = new NancyHost(config, uri);
         }
