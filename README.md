@@ -1,3 +1,5 @@
+[![Build status](https://ci.appveyor.com/api/projects/status/765hkbmm62j16li3?svg=true)](https://ci.appveyor.com/project/toenuff/flancy)
+
 # Flancy - A web microframework for Windows PowerShell
 
 Flancy comes from combing Flask (python web microframework) and [Nancy](http://nancyfx.org/) (the .NET microframework libraries used by this module).  Flask + Nancy = Flancy!
