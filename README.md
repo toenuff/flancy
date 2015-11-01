@@ -1,3 +1,5 @@
+[![Build status](https://ci.appveyor.com/api/projects/status/765hkbmm62j16li3?svg=true)](https://ci.appveyor.com/project/toenuff/flancy)
+
 # Flancy - A web microframework for Windows PowerShell
 
 Flancy comes from combing Flask (python web microframework) and [Nancy](http://nancyfx.org/) (the .NET microframework libraries used by this module).  Flask + Nancy = Flancy!
@@ -42,5 +44,5 @@ A ton - I know there's a ton of bugs and things to think about.  Start logging i
 In order to contribute, please create a Pull Request against the devel branch.  Try to include the following:
  * In the commit, if it resolves an issue, say "Fixes #xx" where xx is the issue number or at least refer to the Issue # by specifying "#xx" somewhere in your commit.
  * If there is no test for what you have done, please try to write one
- * Ensure that all tests pass prior to submitting
+ * Ensure that all tests pass prior to submitting - tests are run by calling maketest.ps1.  You cannot run invoke-pester by itself or the tests will fail.
  * Update any relevant documentation or the example.ps1 file
