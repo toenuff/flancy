@@ -22,6 +22,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+param(
+    [Parameter(Mandatory=$false)]
+    [switch] $schemaonly
+)
+
 $here = ''
 if ($MyInvocation.MyCommand.Path) {
     $here = Split-Path $MyInvocation.MyCommand.Path
@@ -29,7 +34,14 @@ if ($MyInvocation.MyCommand.Path) {
     $here = $pwd -replace '^\S+::',''
 }
 
-foreach ($file in (ls (join-path $here "tests/*.tests.ps1"))) {
+# Schema test is often run - thought it would be good to offer it quickly without other tests
+if ($schemaonly) {
+    $tests = get-childitem (join-path $here "tests/webschema.tests.ps1")
+} else {
+    $tests = get-childitem (join-path $here "tests/*.tests.ps1")
+}
+
+foreach ($file in $tests ) {
     $nunitxml = $file.fullname + ".nunit.result.xml"
     $clixml = $file.fullname + ".clixml.result.xml"
     powershell.exe -noprofile -c "invoke-pester -path $($file.fullname) -outputFormat NUnitXml -OutputFile $nunitxml -passthru |export-clixml -path $clixml"
