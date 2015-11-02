@@ -19,17 +19,17 @@ function New-Flancy {
     }
 
     $MethodBody = '
-        string command = @"function RouteBody {{ param($Parameters, $Request) {0} }}";
-        this.shell.Commands.AddScript(command);
-        this.shell.Invoke();
-        this.shell.Commands.Clear(); 
-        this.shell.Commands.AddCommand("RouteBody").AddParameter("Parameters", _).AddParameter("Request", Request);
-        var output = string.Empty;
-        foreach(var item in this.shell.Invoke()) 
-        {{
-            output += item;
-        }}
-        return output;
+            string command = @"function RouteBody {{ param($Parameters, $Request) {0} }}";
+            this.shell.Commands.AddScript(command);
+            this.shell.Invoke();
+            this.shell.Commands.Clear(); 
+            this.shell.Commands.AddCommand("RouteBody").AddParameter("Parameters", _).AddParameter("Request", Request);
+            var output = string.Empty;
+            foreach(var item in this.shell.Invoke()) 
+            {{
+                output += item;
+            }}
+            return output;
         '
 
     $code = @"
@@ -51,7 +51,11 @@ namespace Flancy {
     $routes = ''
     foreach ($entry in $webschema) {
         $method = (Get-Culture).TextInfo.ToTitleCase($entry.method)
-        $routes += "`r`n$method[`"$($entry.path)`"] = _ => "
+        if ($entry.parameters) {
+            $routes += "`r`n            $method[`"$($entry.path)`"] = parameters => "
+        } else {
+            $routes += "`r`n            $method[`"$($entry.path)`"] = _ => "
+        }
         $routes += "{try {"
         $routes += ($MethodBody -f ($entry.script -replace '"', '""'))
         $routes += "} catch (System.Exception ex) { return ex.Message; }"
@@ -80,7 +84,7 @@ namespace Flancy {
 }
 "@ 
 
-Write-Debug $code
+    Write-Debug $code
 
     add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
     $flancy = new-object "flancy.flancy" -argumentlist $url
