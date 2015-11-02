@@ -8,8 +8,8 @@ if ($MyInvocation.MyCommand.Path) {
 import-module (join-path $currdir flancy.psd1) -Force
 
 $url = "http://localhost:8001"
-
-new-flancy -url $url -webschema @(
+ 
+new-flancy -url $url -Authentication Token -webschema @(
     @{
         path   = '/'
         method = 'get'
@@ -27,6 +27,7 @@ new-flancy -url $url -webschema @(
             $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
             Start-Process $processname
         }
+        authRequired = $true
     },@{
         path   = '/process/{name}'
         method = 'get'
@@ -39,11 +40,24 @@ new-flancy -url $url -webschema @(
         script = { 
             Get-Process | ConvertTo-HTML name, id, path
         }
+    },@{
+        path   = '/authenticate'
+        method = 'post'
+        script = { 
+            New-Token -UserName "Adam" -Context $Context
+        }
     }
 )
 
+
 Invoke-RestMethod -Uri http://localhost:8001/process -Headers @{'Accept'='application/json';'Content-Type'='application/json'}
-Invoke-RestMethod -Uri http://localhost:8001/process -Method Post -Body "Notepad" -Headers @{'Accept'='application/json'}
 Invoke-RestMethod -Uri http://localhost:8001/process/notepad 
 start http://localhost:8001
 start http://localhost:8001/prettyprocess
+
+#
+#   Token Authenticated Request
+#
+$Token = Invoke-RestMethod -Uri http://localhost:8001/authenticate -Method Post -Headers @{'Accept'='application/json'}
+Invoke-RestMethod -Uri http://localhost:8001/process -Method Post -Body "Notepad" -Headers @{'Accept'='application/json';Authorization="Token $token"}
+
