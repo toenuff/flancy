@@ -16,12 +16,7 @@ Describe "New-Flancy Defaults" {
         {New-Flancy} |should not throw
     }
     It "Creates a web server on port 8000 by default returning Hello World! from the / route" {
-        New-Flancy
         Invoke-RestMethod http://localhost:8000 |Should Be "Hello World!"
-    }
-
-    AfterEach {
-        try { Stop-Flancy } catch { }
     }
 }
 

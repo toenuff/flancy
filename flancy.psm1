@@ -311,7 +311,6 @@ function Start-Flancy {
 function Stop-Flancy {
     if ($script:flancy) {
         $script:flancy.stop()
-        $script:flancy = $null
     } else {
         throw "Flancy not found.  Did you successfully run New-Flancy?"
     }

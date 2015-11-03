@@ -30,17 +30,15 @@ Describe "New-Flancy token authentication" {
         {new-flancy -url $url -Authentication Token -webschema $webschema} |should not throw
     }
     It "should return a valid token" {
-        new-flancy -url $url -Authentication Token -webschema $webschema
         $Token = Invoke-RestMethod -Uri http://localhost:8001/authenticate -Method Post -verbose
         $token.length |should not be 0
         #$token |should not contain "\r\n"
     }
     It "should enforce authentication" {
-        new-flancy -url $url -Authentication Token -webschema $webschema
         { Invoke-RestMethod -Uri http://localhost:8001/authexample -verbose } | Should throw
     }
-
-    AfterEach {
-        Stop-Flancy
+    it "should authenticate with token" {
+        $Token = Invoke-RestMethod -Uri http://localhost:8001/authenticate -Method Post -verbose
+        Invoke-RestMethod -Uri http://localhost:8001/authexample  -Headers @{'Accept'='application/json';Authorization="Token $token"}
     }
 }
