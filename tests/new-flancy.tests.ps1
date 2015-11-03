@@ -21,7 +21,7 @@ Describe "New-Flancy Defaults" {
     }
 
     AfterEach {
-        Stop-Flancy
+        try { Stop-Flancy } catch { }
     }
 }
 
