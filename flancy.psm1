@@ -309,8 +309,9 @@ function Start-Flancy {
 }
 
 function Stop-Flancy {
-    if ($flancy) {
-        $flancy.stop()
+    if ($script:flancy) {
+        $script:flancy.stop()
+        $script:flancy = $null
     } else {
         throw "Flancy not found.  Did you successfully run New-Flancy?"
     }
@@ -325,7 +326,7 @@ function New-Token {
  New-Token is used within the "script" of a Flancy route (in the web schema).  It can be used to retrieve an auth token for a user
  
  .Parameter Claims
- A collection of 
+ A collection of groups that the user belongs to.
 
  .Parameter Username
  The username to get a token for.
@@ -337,10 +338,10 @@ function New-Token {
  A user to retrieve a token for
  
  .Outputs
- Nancy.Security.IUserIdentity
+ String
 
  .Example
- New-Token -Public
+ New-Token -UserName $userName -Context $Context
 
  .LINK
  https://github.com/toenuff/flancy/
