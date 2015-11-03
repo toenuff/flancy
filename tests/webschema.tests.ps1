@@ -8,6 +8,30 @@ add-type -path "$here\..\nancy\Nancy.dll"
 add-type -path "$here\..\nancy\Nancy.Hosting.Self.dll"
 Invoke-Expression (gc "$here\..\flancy.psm1" |out-String)
 
+Describe "Flancy web schema validator tests" {
+    It "Should throw an error when calling New-Flancy with the custom web schema, when it's empty" {
+        {New-Flancy -WebSchema $null} | Should Throw
+    }
+    It "Should throw an error when calling New-Flancy with the custom web schema, when it's not a dictionary" {
+        {New-Flancy -WebSchema @(1,2,3)} | Should Throw
+    }
+    It "Should throw an error when calling New-Flancy with the custom web schema, when one or more propreties are empty" {
+        {New-Flancy -WebSchema @{Path = '/' ; Script = {"Hello World!"}}} | Should Throw
+    }
+    It "Should throw an error when calling New-Flancy with the custom web schema, when its properties contain multiple values" {
+        {New-Flancy -WebSchema @{Path = '/';Method = 'Foo','Get' ; Script = {"Hello World!"}}} | Should Throw
+    }
+    It "Should throw an error when calling New-Flancy with the custom web schema, when it contains invalid 'path'" {
+        {New-Flancy -WebSchema @{Path = '\\\' ; Method = 'Get' ; Script = {"Hello World!"}}} | Should Throw
+    }
+    It "Should throw an error when calling New-Flancy with the custom web schema, when it contains invalid 'method'" {
+        {New-Flancy -WebSchema @{Path = '/' ; Method = 'Foo' ; Script = {"Hello World!"}}} | Should Throw
+    }
+    It "Should throw an error when calling New-Flancy with the custom web schema, when its 'script' is not a scriptblock or can't be created from a supplied string" {
+        {New-Flancy -WebSchema @{Path = '/' ; Method = 'Get' ; Script = '~!@#$%^&*()_+'}} | Should Throw
+    }
+}
+
 # All of the schemas are in one new-nancy call to speed up the tests.
 # Ideally they should be split up so that each web request tests the single schema element, but with the overhead
 # of each powershell.exe call for the hosts, it's the only way to make the tests runnable while developing.
