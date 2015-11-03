@@ -4,10 +4,8 @@ if ($MyInvocation.MyCommand.Path) {
 } else {
     $here = $pwd -replace '^\S+::',''
 }
-add-type -path "$here\..\nancy\Nancy.dll"
-add-type -path "$here\..\nancy\Nancy.Hosting.Self.dll"
-add-type -path "$here\..\nancy\Nancy.Authentication.Token.dll"
-Invoke-Expression (gc "$here\..\flancy.psm1" |out-String)
+
+Import-Module "$here\..\flancy.psd1" -Force
 
 Describe "New-Flancy Defaults" {
     It "Throws an error when new-flancy is called with a url other than localhost without the -Public switch" {
@@ -18,7 +16,12 @@ Describe "New-Flancy Defaults" {
         {New-Flancy} |should not throw
     }
     It "Creates a web server on port 8000 by default returning Hello World! from the / route" {
+        New-Flancy
         Invoke-RestMethod http://localhost:8000 |Should Be "Hello World!"
+    }
+
+    AfterEach {
+        Stop-Flancy
     }
 }
 

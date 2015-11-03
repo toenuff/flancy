@@ -4,10 +4,8 @@ if ($MyInvocation.MyCommand.Path) {
 } else {
     $here = $pwd -replace '^\S+::',''
 }
-add-type -path "$here\..\nancy\Nancy.dll"
-add-type -path "$here\..\nancy\Nancy.Hosting.Self.dll"
-add-type -path "$here\..\nancy\Nancy.Authentication.Token.dll"
-Invoke-Expression (gc "$here\..\flancy.psm1" |out-String)
+
+Import-Module "$here\..\flancy.psd1" -Force
 
 # All of the schemas are in one new-nancy call to speed up the tests.
 # Ideally they should be split up so that each web request tests the single schema element, but with the overhead
@@ -46,9 +44,11 @@ Describe "Localhost web requests against Flancy schema" {
         {New-Flancy -url http://localhost:8001 -webschema $webschema} |should not throw
     }
     It "Returns the data supplied in the schema from a GET request to /" {
+        New-Flancy -url http://localhost:8001 -webschema $webschema
         Invoke-RestMethod http://localhost:8001 |Should Be "Welcome to Flancy!"
     }
     It "Returns raw JSON appropriately" {
+        New-Flancy -url http://localhost:8001 -webschema $webschema
         $data = Invoke-WebRequest -Uri http://localhost:8001/json -Headers @{'Accept'='application/json';'Content-Type'='application/json'}
         $data.content |should be @"
 {
@@ -62,14 +62,20 @@ Describe "Localhost web requests against Flancy schema" {
 "@
     }
     It "Accepts post data and passes it through to $request.body appropriately" {
+        New-Flancy -url http://localhost:8001 -webschema $webschema
         $data = Invoke-RestMethod -Uri http://localhost:8001/commandfrompost -Method Post -Body "Get-ChildItem" -Headers @{'Accept'='application/json'}
         $data.verb |should be get
         $data.noun |should be childitem
     }
     It "Accepts parameter data and passes it through to $parameters appropriately" {
+        New-Flancy -url http://localhost:8001 -webschema $webschema
         $data = Invoke-RestMethod -Uri http://localhost:8001/commandfromparameter/Set-Item -Headers @{'Accept'='application/json'}
         $data.verb |should be set 
         $data.noun |should be item
+    }
+
+    AfterEach {
+        Stop-Flancy
     }
 }
 
