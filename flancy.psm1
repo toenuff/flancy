@@ -160,7 +160,7 @@ function New-Flancy {
         [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}}),
         [switch] $Passthru,
         [ValidateSet("None", "Token")]
-        [string]$Authentication = "None"
+        [string]$Authentication = "None",
         [switch] $Public
     )
     if ($SCRIPT:flancy) {
@@ -314,6 +314,95 @@ function Stop-Flancy {
     }
 }
 
+<#
+.Synopsis
+   Adds an endpoint to handler GET requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-GetHandler -Path "/Process" -Script { Get-Process | ConvertTo-Json } 
+.EXAMPLE
+   Get "/Process" { Get-Process | ConvertTo-Json } 
+#>
+function Add-GetHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Get";
+        Script=$Script;
+    }
+}
+
+<#
+.Synopsis
+   Adds an endpoint to handler POST requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-PostHandler -Path "/Process" -Script { Start-Process $Name } 
+.EXAMPLE
+   Post"/Process" { Start-Process $Name } 
+#>
+function Add-PostHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Post";
+        Script=$Script;
+    }
+}
+
+<#
+.Synopsis
+   Adds an endpoint to handler DELETE requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-DeleteHandler -Path "/Process/{id}" -Script { Stop-Process $Parameters.Id } 
+.EXAMPLE
+   Delete "/Process/{id}" { Stop-Process $Parameters.Id } 
+#>
+function Add-DeleteHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Delete";
+        Script=$Script;
+    }
+}
+
+
+<#
+.Synopsis
+   Adds an endpoint to handler PUT requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-PutHandler -Path "/Service/{name}/{status}" -Script { Set-Service -Name $Parameters.Id -Status $Parameters.Status  } 
+.EXAMPLE
+   Put "/Service/{name}/{status}" { Set-Service -Name $Parameters.Id -Status $Parameters.Status  } 
+#>
+function Add-PutHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Put";
+        Script=$Script;
+    }
+}
+
 function New-Token {
     param(
     [Parameter(Mandatory=$true)]
@@ -329,3 +418,8 @@ function New-Token {
     $Tokenizer = New-Object Nancy.Authentication.Token.Tokenizer
     $Tokenizer.Tokenize($User, $context)
 }
+
+New-Alias -Name Get -Value Add-GetHandler
+New-Alias -Name Put -Value Add-PutHandler
+New-Alias -Name Post -Value Add-PostHandler
+New-Alias -Name Delete -Value Add-DeleteHandler
