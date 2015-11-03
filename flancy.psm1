@@ -1,5 +1,6 @@
 $nancydll = ([Nancy.NancyModule]).assembly.location
 $nancyselfdll = ([Nancy.Hosting.Self.NancyHost]).assembly.location
+$nancyAuthToken = ([Nancy.Authentication.Token.Tokenizer]).assembly.location
 $MicrosoftCSharp = "Microsoft.CSharp"
 
 
@@ -64,9 +65,6 @@ function New-Flancy {
      }
  )
 
-
- 
-
  .Parameter Public
  This is the list of properties that will be available to the class.  This can be thought of as a Select-Object
  method defines the 
@@ -74,7 +72,12 @@ function New-Flancy {
  after your get- cmdlet.  Regardless of what your cmdlet returns, only the properties listed will be visible
  when viewing the objects for the class.
 
+ .Parameter Authentication
+ This can currently be set to "Token" or "None".  It defaults to none.  When authentication is used, you must pass a valid token in your headers when communicating with the server.
+ A Flancy service can return a token by using the New-Token cmdlet.
+
  .Parameter Passthru
+ This will return the $flancy object that is created by New-Flancy.
 
  .Inputs
  Collection of hashes containing the schema of the web server
@@ -158,7 +161,9 @@ function New-Flancy {
         [Parameter(Mandatory=$false)]
         [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}}),
         [switch] $Passthru,
-        [switch] $Public
+        [switch] $Public,
+        [ValidateSet("None", "Token")]
+        [string]$Authentication = "None"
     )
     if ($SCRIPT:flancy) {
         throw "A flancy already exists.  To create a new one, you must restart your PowerShell session"
@@ -169,12 +174,24 @@ function New-Flancy {
         break
     }
 
+    $Bootstrapper = [String]::Empty
+    if ($Authentication -eq "Token")
+    {
+     $Bootstrapper = 'public class Bootstrapper : DefaultNancyBootstrapper
+                    {
+                        protected override void RequestStartup(TinyIoCContainer container, IPipelines pipelines, NancyContext context)
+                        {
+                            TokenAuthentication.Enable(pipelines, new TokenAuthenticationConfiguration(container.Resolve<ITokenizer>()));
+                        }
+                    }'
+    }
+
     $MethodBody = '
-            string command = @"function RouteBody {{ param($Parameters, $Request) {0} }}";
+            string command = @"function RouteBody {{ param($Parameters, $Request, $Context) {0} }}";
             this.shell.Commands.AddScript(command);
             this.shell.Invoke();
             this.shell.Commands.Clear(); 
-            this.shell.Commands.AddCommand("RouteBody").AddParameter("Parameters", _).AddParameter("Request", Request);
+            this.shell.Commands.AddCommand("RouteBody").AddParameter("Parameters", _).AddParameter("Request", Request).AddParameter("Context", Context);
             var output = string.Empty;
             foreach(var item in this.shell.Invoke()) 
             {{
@@ -183,12 +200,17 @@ function New-Flancy {
             return output;
         '
 
+
     $code = @"
 using System;
 using System.Management.Automation;
 using Nancy;
 using Nancy.Hosting.Self;
 using Nancy.Extensions;
+using Nancy.Authentication.Token;
+using Nancy.Security;
+using Nancy.Bootstrapper;
+using Nancy.TinyIoc;
 
 namespace Flancy {
     public class Module : NancyModule
@@ -196,6 +218,9 @@ namespace Flancy {
         public PowerShell shell = PowerShell.Create();
         public Module()
         {
+            shell.Commands.AddScript(@`"Import-Module $PSScriptRoot`");
+            shell.Invoke();
+            shell.Commands.Clear();
             StaticConfiguration.DisableErrorTraces = false;
 
 "@
@@ -207,14 +232,19 @@ namespace Flancy {
         } else {
             $routes += "`r`n            $method[`"$($entry.path)`"] = _ => "
         }
-        $routes += "{try {"
+        $routes += "{"
+        if ($entry.AuthRequired) {
+            $routes += "this.RequiresAuthentication();"
+        }
+        $routes += "try {"
+
+
         $routes += ($MethodBody -f ($entry.script -replace '"', '""'))
         $routes += "} catch (System.Exception ex) { return ex.Message; }"
         $routes += "};`r`n"
     }
     $code += $routes
     $code+=@"
-
         }
     }
     public class Flancy 
@@ -243,12 +273,14 @@ namespace Flancy {
             this.host.Stop();
         }
     }
+
+    $Bootstrapper
 }
 "@ 
 
     Write-Debug $code
 
-    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
+    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp, $nancyAuthToken)
     $flancy = new-object "flancy.flancy" -argumentlist $url
     try {
         $flancy.start()
@@ -281,5 +313,54 @@ function Stop-Flancy {
         $flancy.stop()
     } else {
         throw "Flancy not found.  Did you successfully run New-Flancy?"
+    }
+}
+
+function New-Token {
+<#
+ .Synopsis
+ Retrieves an auth token for a user
+ 
+ .Description
+ New-Token is used within the "script" of a Flancy route (in the web schema).  It can be used to retrieve an auth token for a user
+ 
+ .Parameter Claims
+ A collection of 
+
+ .Parameter Username
+ The username to get a token for.
+
+ .Parameter Context
+ This is the $context special variable in the scriptblock of a route.
+
+ .Inputs
+ A user to retrieve a token for
+ 
+ .Outputs
+ Nancy.Security.IUserIdentity
+
+ .Example
+ New-Token -Public
+
+ .LINK
+ https://github.com/toenuff/flancy/
+
+#>
+    param(
+    [Parameter(Mandatory=$true)]
+    [string]$UserName, 
+    [Parameter(Mandatory=$true)]
+    [Nancy.NancyContext]$Context, 
+    [Parameter(Mandatory=$false)]
+    [string[]]$Claims=@())
+
+    $IdentityResolver = New-Object Nancy.Authentication.Token.DefaultUserIdentityResolver
+    $User = $IdentityResolver.GetUser($UserName, $Claims, $context)
+    $username
+    try {
+        $Tokenizer = New-Object Nancy.Authentication.Token.Tokenizer
+        $Tokenizer.Tokenize($User, $context)
+    } catch [exception] {
+        $_ |select *
     }
 }

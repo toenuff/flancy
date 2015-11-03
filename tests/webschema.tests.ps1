@@ -6,6 +6,7 @@ if ($MyInvocation.MyCommand.Path) {
 }
 add-type -path "$here\..\nancy\Nancy.dll"
 add-type -path "$here\..\nancy\Nancy.Hosting.Self.dll"
+add-type -path "$here\..\nancy\Nancy.Authentication.Token.dll"
 Invoke-Expression (gc "$here\..\flancy.psm1" |out-String)
 
 # All of the schemas are in one new-nancy call to speed up the tests.
