@@ -156,6 +156,60 @@ function New-Flancy {
         [Parameter(Position=0)]
         [string] $url='http://localhost:8000',
         [Parameter(Mandatory=$false)]
+        [ValidateScript({
+            $PropSet = 'path', 'method', 'script'
+            $HttpMethods =  'Delete', 'Get', 'Head', 'Options', 'Post', 'Put', 'Patch'
+
+            $_ | ForEach-Object {
+			    if($_.GetType().GetInterfaces().Name -notcontains 'IDictionary')
+                {
+				    throw 'One of the the supplied objects is not a dictionary.'
+			    }
+
+                $MissingProps = Compare-Object -ReferenceObject $PropSet -DifferenceObject ($_.Keys -as [array]) |
+                    Where-Object {$_.SideIndicator -eq '<='} |
+                        Select-Object -ExpandProperty InputObject
+
+                if($MissingProps)
+                {
+                    throw "One of the the supplied objects is missing following property(ies): $($MissingProps -join ', ')"
+                }
+
+                $EmptyProps = $_.GetEnumerator() | Where-Object {!$_.Value} | Select-Object -ExpandProperty Name
+                if($EmptyProps)
+                {
+                    throw "Empty properties are not allowed: $($EmptyProps -join ', ')"
+                }
+
+                foreach ($prop in $PropSet){
+                    if(($_.$prop -as [array]).Count -ne 1)
+                    {
+                        throw "Multiple values in properties are not allowed: $($_.$prop -join ', ')"
+                    }
+                }
+
+                $NonValidHttpMethods = Compare-Object -ReferenceObject $HttpMethods -DifferenceObject ($_.Method -as [array]) |
+                    Where-Object {$_.SideIndicator -eq '=>'} |
+                        Select-Object -ExpandProperty InputObject
+                if($NonValidHttpMethods)
+                {
+                    throw "Not valid HTTP method(s): $($NonValidHttpMethods -join ', ')"
+                }
+
+                $ValidUri = $_.Path -as [System.URI]
+                if(!($ValidUri -and !$ValidUri.IsAbsoluteUri))
+                {
+                    throw "Not valid 'path' property: $($_.Path)"
+                }
+
+                if(!($_.Script -is [scriptblock] -or $(try{[scriptblock]::Create($_.Script)}catch{$false})))
+                {
+                    throw "Not valid 'script' property: $($_.Script)"
+                }
+            }
+            $true
+        })]
+        [ValidateNotNullOrEmpty()]
         [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}}),
         [switch] $Passthru,
         [switch] $Public
