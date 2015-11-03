@@ -1,0 +1,7 @@
+install:
+  - cinst pester
+
+build: false
+
+test_script:
+  - ps: .\maketest.ps1

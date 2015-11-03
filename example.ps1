@@ -49,8 +49,8 @@ new-flancy -url $url -Authentication Token -webschema @(
     }
 )
 
-
-Invoke-RestMethod -Uri http://localhost:8001/process -Headers @{'Accept'='application/json';'Content-Type'='application/json'}
+Invoke-RestMethod -Uri http://localhost:8001/process -Headers @{'Accept'='application/json';'Content-Type'='application/json'} #V3 and ealier you cannot use these headers - it will work without them though
+Invoke-RestMethod -Uri http://localhost:8001/process -Method Post -Body "Notepad" -Headers @{'Accept'='application/json'} #V3 and ealier you cannot use these headers - it will work without them though
 Invoke-RestMethod -Uri http://localhost:8001/process/notepad 
 start http://localhost:8001
 start http://localhost:8001/prettyprocess
