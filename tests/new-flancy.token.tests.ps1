@@ -38,8 +38,7 @@ Describe "New-Flancy token authentication" {
         { Invoke-RestMethod -Uri http://localhost:8001/authexample } | Should throw
     }
     it "should authenticate with token" {
-        $Token = Invoke-RestMethod -Uri http://localhost:8001/authenticate -Method Post -Verbose
-        Write-Host $Token
-        Invoke-RestMethod -Uri http://localhost:8001/authexample  -Headers @{'Accept'='application/json';Authorization="Token$token"} -Verbose
+        $Token = Invoke-RestMethod -Uri http://localhost:8001/authenticate -Method Post
+        Invoke-RestMethod -Uri http://localhost:8001/authexample  -Headers @{'Accept'='application/json';Authorization="Token$token"}
     }
 }
