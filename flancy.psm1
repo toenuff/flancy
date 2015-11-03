@@ -356,7 +356,6 @@ function New-Token {
 
     $IdentityResolver = New-Object Nancy.Authentication.Token.DefaultUserIdentityResolver
     $User = $IdentityResolver.GetUser($UserName, $Claims, $context)
-    $username
     try {
         $Tokenizer = New-Object Nancy.Authentication.Token.Tokenizer
         $Tokenizer.Tokenize($User, $context)
