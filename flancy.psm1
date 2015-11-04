@@ -1,5 +1,6 @@
 $nancydll = ([Nancy.NancyModule]).assembly.location
 $nancyselfdll = ([Nancy.Hosting.Self.NancyHost]).assembly.location
+$nancyAuthToken = ([Nancy.Authentication.Token.Tokenizer]).assembly.location
 $MicrosoftCSharp = "Microsoft.CSharp"
 
 
@@ -212,6 +213,8 @@ function New-Flancy {
         [ValidateNotNullOrEmpty()]
         [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}}),
         [switch] $Passthru,
+        [ValidateSet("None", "Token")]
+        [string]$Authentication = "None",
         [switch] $Public
     )
     if ($SCRIPT:flancy) {
@@ -223,12 +226,24 @@ function New-Flancy {
         break
     }
 
+    $Bootstrapper = [String]::Empty
+    if ($Authentication -eq "Token")
+    {
+     $Bootstrapper = 'public class Bootstrapper : DefaultNancyBootstrapper
+                    {
+                        protected override void RequestStartup(TinyIoCContainer container, IPipelines pipelines, NancyContext context)
+                        {
+                            TokenAuthentication.Enable(pipelines, new TokenAuthenticationConfiguration(container.Resolve<ITokenizer>()));
+                        }
+                    }'
+    }
+
     $MethodBody = '
-            string command = @"function RouteBody {{ param($Parameters, $Request) {0} }}";
+            string command = @"function RouteBody {{ param($Parameters, $Request, $Context) {0} }}";
             this.shell.Commands.AddScript(command);
             this.shell.Invoke();
             this.shell.Commands.Clear(); 
-            this.shell.Commands.AddCommand("RouteBody").AddParameter("Parameters", _).AddParameter("Request", Request);
+            this.shell.Commands.AddCommand("RouteBody").AddParameter("Parameters", _).AddParameter("Request", Request).AddParameter("Context", Context);
             var output = string.Empty;
             foreach(var item in this.shell.Invoke()) 
             {{
@@ -237,12 +252,17 @@ function New-Flancy {
             return output;
         '
 
+
     $code = @"
 using System;
 using System.Management.Automation;
 using Nancy;
 using Nancy.Hosting.Self;
 using Nancy.Extensions;
+using Nancy.Authentication.Token;
+using Nancy.Security;
+using Nancy.Bootstrapper;
+using Nancy.TinyIoc;
 
 namespace Flancy {
     public class Module : NancyModule
@@ -250,6 +270,9 @@ namespace Flancy {
         public PowerShell shell = PowerShell.Create();
         public Module()
         {
+            shell.Commands.AddScript(@`"Import-Module $PSScriptRoot`");
+            shell.Invoke();
+            shell.Commands.Clear();
             StaticConfiguration.DisableErrorTraces = false;
 
 "@
@@ -261,14 +284,19 @@ namespace Flancy {
         } else {
             $routes += "`r`n            $method[`"$($entry.path)`"] = _ => "
         }
-        $routes += "{try {"
+        $routes += "{"
+        if ($entry.AuthRequired) {
+            $routes += "this.RequiresAuthentication();"
+        }
+        $routes += "try {"
+
+
         $routes += ($MethodBody -f ($entry.script -replace '"', '""'))
         $routes += "} catch (System.Exception ex) { return ex.Message; }"
         $routes += "};`r`n"
     }
     $code += $routes
     $code+=@"
-
         }
     }
     public class Flancy 
@@ -297,12 +325,14 @@ namespace Flancy {
             this.host.Stop();
         }
     }
+
+    $Bootstrapper
 }
 "@ 
 
     Write-Debug $code
 
-    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
+    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp, $nancyAuthToken)
     $flancy = new-object "flancy.flancy" -argumentlist $url
     try {
         $flancy.start()
@@ -337,3 +367,113 @@ function Stop-Flancy {
         throw "Flancy not found.  Did you successfully run New-Flancy?"
     }
 }
+
+<#
+.Synopsis
+   Adds an endpoint to handler GET requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-GetHandler -Path "/Process" -Script { Get-Process | ConvertTo-Json } 
+.EXAMPLE
+   Get "/Process" { Get-Process | ConvertTo-Json } 
+#>
+function Add-GetHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Get";
+        Script=$Script;
+    }
+}
+
+<#
+.Synopsis
+   Adds an endpoint to handler POST requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-PostHandler -Path "/Process" -Script { Start-Process $Name } 
+.EXAMPLE
+   Post"/Process" { Start-Process $Name } 
+#>
+function Add-PostHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Post";
+        Script=$Script;
+    }
+}
+
+<#
+.Synopsis
+   Adds an endpoint to handler DELETE requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-DeleteHandler -Path "/Process/{id}" -Script { Stop-Process $Parameters.Id } 
+.EXAMPLE
+   Delete "/Process/{id}" { Stop-Process $Parameters.Id } 
+#>
+function Add-DeleteHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Delete";
+        Script=$Script;
+    }
+}
+
+
+<#
+.Synopsis
+   Adds an endpoint to handler PUT requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-PutHandler -Path "/Service/{name}/{status}" -Script { Set-Service -Name $Parameters.Id -Status $Parameters.Status  } 
+.EXAMPLE
+   Put "/Service/{name}/{status}" { Set-Service -Name $Parameters.Id -Status $Parameters.Status  } 
+#>
+function Add-PutHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Put";
+        Script=$Script;
+    }
+}
+
+function New-Token {
+    param(
+    [Parameter(Mandatory=$true)]
+    [string]$UserName, 
+    [Parameter(Mandatory=$true)]
+    [Nancy.NancyContext]$Context, 
+    [Parameter(Mandatory=$false)]
+    [string[]]$Claims=@())
+
+    $IdentityResolver = New-Object Nancy.Authentication.Token.DefaultUserIdentityResolver
+    $User = $IdentityResolver.GetUser($UserName, $Claims, $context)
+
+    $Tokenizer = New-Object Nancy.Authentication.Token.Tokenizer
+    $Tokenizer.Tokenize($User, $context)
+}
+
+New-Alias -Name Get -Value Add-GetHandler
+New-Alias -Name Put -Value Add-PutHandler
+New-Alias -Name Post -Value Add-PostHandler
+New-Alias -Name Delete -Value Add-DeleteHandler

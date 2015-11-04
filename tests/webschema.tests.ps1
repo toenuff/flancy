@@ -6,6 +6,7 @@ if ($MyInvocation.MyCommand.Path) {
 }
 add-type -path "$here\..\nancy\Nancy.dll"
 add-type -path "$here\..\nancy\Nancy.Hosting.Self.dll"
+add-type -path "$here\..\nancy\Nancy.Authentication.Token.dll"
 Invoke-Expression (gc "$here\..\flancy.psm1" |out-String)
 
 Describe "Flancy web schema validator tests" {
@@ -37,32 +38,31 @@ Describe "Flancy web schema validator tests" {
 # of each powershell.exe call for the hosts, it's the only way to make the tests runnable while developing.
 
 $webschema = @(
-    @{
-        path   = '/'
-        method = 'get'
-        script = { "Welcome to Flancy!" }
-    },@{
-        path   = '/json'
-        method = 'get'
-        script = { 
-            @{ name = 'blah'; list = @(0,1,2)} |convertto-json
-        }
-    },@{
-        path   = '/commandfrompost'
-        method = 'post'
-        script = { 
-            $command = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
-            Get-command $command |select name, noun, verb |convertto-json
-        }
-    },@{
-        path   = '/commandfromparameter/{name}'
-        method = 'get'
-        script = { 
-            $command = $parameters.name
-            Get-command $command |select name, noun, verb |convertto-json
-        }
+    Get "/" { 
+        "Welcome to Flancy!"
     }
-)
+
+    Get "/json" {
+        @{ name = 'blah'; list = @(0,1,2)} |convertto-json
+    }
+
+    Post "/commandfrompost" {
+        $command = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
+        Get-command $command |select name, noun, verb |convertto-json
+    }
+
+    Get '/commandfromparameter/{name}' {
+        $command = $parameters.name
+        Get-command $command |select name, noun, verb |convertto-json
+    }
+    
+    Put "/json" {
+        
+    }
+    
+    Delete "/json" {
+        
+    })
 
 Describe "Localhost web requests against Flancy schema" {
     It "Should not throw an error when calling New-Flancy with the custom web schema" {
@@ -93,6 +93,13 @@ Describe "Localhost web requests against Flancy schema" {
         $data = Invoke-RestMethod -Uri http://localhost:8001/commandfromparameter/Set-Item -Headers @{'Accept'='application/json'}
         $data.verb |should be set 
         $data.noun |should be item
+    }
+    It "Accepts PUT request" {
+        { Invoke-RestMethod -Uri http://localhost:8001/json -Method Put -Headers @{'Accept'='application/json'} } | Should not throw
+    }
+    
+    It "Accepts DELETE request" {
+        { Invoke-RestMethod -Uri http://localhost:8001/json -Method Delete -Headers @{'Accept'='application/json'} } | Should not throw
     }
 }
 
