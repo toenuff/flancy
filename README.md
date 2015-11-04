@@ -20,17 +20,10 @@ import-module flancy
 $url = "http://localhost:8001"
 
 new-flancy -url $url -webschema @(
-    @{
-        path   = '/'
-        method = 'get'
-        script = { "Welcome to Flancy!" }
-    },@{
-        path   = '/processes'
-        method = 'get'
-        script = { 
-            $processes = Get-Process
-            $processes |select name, id |convertto-json
-        }
+    Get '/' { "Welcome to Flancy!" }
+    Get '/processes' {
+        $processes = Get-Process
+        $processes |select name, id |convertto-json
     }
 )
 ```
@@ -41,8 +34,8 @@ One thing to note:  Because of the way that Nancy works, I cannot create new cus
 A ton - I know there's a ton of bugs and things to think about.  Start logging issues and feel free to contribute (including writing tests) via pull request.
 
 # Contribute
-In order to contribute, please create a Pull Request against the devel branch.  Try to include the following:
- * In the commit, if it resolves an issue, say "Fixes #xx" where xx is the issue number or at least refer to the Issue # by specifying "#xx" somewhere in your commit.
+In order to contribute, please create a Pull Request against the devel branch.  Please include the following with each pull request:
+ * In the commits, if it resolves an issue, say "Fixes #xx" where xx is the issue number or at least refer to the Issue # by specifying "#xx" somewhere in your commit.
  * If there is no test for what you have done, please try to write one
  * Ensure that all tests pass prior to submitting - tests are run by calling maketest.ps1.  You cannot run invoke-pester by itself or the tests will fail.
  * Update any relevant documentation or the example.ps1 file
