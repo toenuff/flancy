@@ -6,7 +6,7 @@ if ($MyInvocation.MyCommand.Path) {
 }
 add-type -path "$here\..\nancy\Nancy.dll"
 add-type -path "$here\..\nancy\Nancy.Hosting.Self.dll"
-Invoke-Expression (gc "$here\..\flancy.psm1" |out-String)
+import-module "$here\..\flancy.psd1"
 
 Describe "Flancy web schema validator tests" {
     It "Should throw an error when calling New-Flancy with the custom web schema, when it's empty" {
@@ -36,31 +36,50 @@ Describe "Flancy web schema validator tests" {
 # Ideally they should be split up so that each web request tests the single schema element, but with the overhead
 # of each powershell.exe call for the hosts, it's the only way to make the tests runnable while developing.
 
+Describe "The DSL should create the same hash elements that can be used by webschema" {
+    It 'Translates Get appropriately' {
+        $script = {'test'}
+        $testdsl = get '/' $script
+        $testdsl.method |should be 'get'
+        $testdsl.path   |should be '/'
+        $testdsl.script |should be $script
+    }
+    It 'Translates Post appropriately' {
+        $script = {'test'}
+        $testdsl = Post '/' $script
+        $testdsl.method |should be 'post'
+        $testdsl.path   |should be '/'
+        $testdsl.script |should be $script
+    }
+    It 'Translates Put appropriately' {
+        $script = {'test'}
+        $testdsl = Put '/' $script
+        $testdsl.method |should be 'put'
+        $testdsl.path   |should be '/'
+        $testdsl.script |should be $script
+    }
+    It 'Translates Delete appropriately' {
+        $script = {'test'}
+        $testdsl = delete '/' $script
+        $testdsl.method |should be 'delete'
+        $testdsl.path   |should be '/'
+        $testdsl.script |should be $script
+    }
+}
 $webschema = @(
-    @{
-        path   = '/'
-        method = 'get'
-        script = { "Welcome to Flancy!" }
-    },@{
-        path   = '/json'
-        method = 'get'
-        script = { 
+    Get '/' {
+        "Welcome to Flancy!"
+    }
+    Get '/json' {
             @{ name = 'blah'; list = @(0,1,2)} |convertto-json
-        }
-    },@{
-        path   = '/commandfrompost'
-        method = 'post'
-        script = { 
+    }
+    Post '/commandfrompost' {
             $command = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
             Get-command $command |select name, noun, verb |convertto-json
-        }
-    },@{
-        path   = '/commandfromparameter/{name}'
-        method = 'get'
-        script = { 
+    }
+    Get '/commandfromparameter/{name}' {
             $command = $parameters.name
             Get-command $command |select name, noun, verb |convertto-json
-        }
     }
 )
 

@@ -10,35 +10,21 @@ import-module (join-path $currdir flancy.psd1) -Force
 $url = "http://localhost:8001"
 
 new-flancy -url $url -webschema @(
-    @{
-        path   = '/'
-        method = 'get'
-        script = { "Welcome to Flancy!" }
-    },@{
-        path   = '/process'
-        method = 'get'
-        script = { 
-            Get-Process | select name, id, path | ConvertTo-Json
-        }
-    },@{
-        path   = '/process'
-        method = 'post'
-        script = { 
-            $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
-            Start-Process $processname
-        }
-    },@{
-        path   = '/process/{name}'
-        method = 'get'
-        script = { 
-            get-process $parameters.name |convertto-json -depth 1
-        }
-    },@{
-        path   = '/prettyprocess'
-        method = 'get'
-        script = { 
-            Get-Process | ConvertTo-HTML name, id, path
-        }
+    Get  '/' {
+        "Welcome to Flancy!"
+    }
+    Get  '/process' {
+        Get-Process | select name, id, path | ConvertTo-Json 
+    }
+    Post '/process' {
+        $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
+        Start-Process $processname
+    }
+    Get '/process/{name}' {
+        get-process $parameters.name |convertto-json -depth 1
+    }
+    Get '/prettyprocess' { 
+        Get-Process | ConvertTo-HTML name, id, path 
     }
 )
 

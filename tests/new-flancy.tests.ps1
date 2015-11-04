@@ -6,7 +6,7 @@ if ($MyInvocation.MyCommand.Path) {
 }
 add-type -path "$here\..\nancy\Nancy.dll"
 add-type -path "$here\..\nancy\Nancy.Hosting.Self.dll"
-Invoke-Expression (gc "$here\..\flancy.psm1" |out-String)
+import-module "$here\..\flancy.psd1"
 
 Describe "New-Flancy Defaults" {
     It "Throws an error when new-flancy is called with a url other than localhost without the -Public switch" {

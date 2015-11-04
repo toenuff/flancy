@@ -19,17 +19,30 @@ function New-Flancy {
  Specifies a url/port in the form: http://servername:xxx to listen on where xxx is the port number to listen on.  When specifying localhost with the public switch activated, it will enable listening on all IP addresses.
 
  .Parameter Webschema
- Webschema takes a collection of hashes.  Each element in the hash represents a different route requested by the client.  The three values used in the hash are path, method, and script.
-
- path defines the address in the url supplied by the client after the http://host:port/ part of the address.  Paths support parameters allowed by Nancy.  For example, if you your path is /process/{name}, the value supplied by the requestor for {name} is passed to your script.  You would use the $parameters special variable to access the name property.  In the /process/{name} example, the property would be $parameters.name in your script.
+ Webschema takes a collection of hashes.  Each element in the hash represents a different route requested by the client.  The three values used in the hash are path, method, and script.  These hashes are abstracted by a DSL that you may use to build the hash.
 
  method defines the HTTP method that will be used by the client to get to the route.
+
+ path defines the address in the url supplied by the client after the http://host:port/ part of the address.  Paths support parameters allowed by Nancy.  For example, if you your path is /process/{name}, the value supplied by the requestor for {name} is passed to your script.  You would use the $parameters special variable to access the name property.  In the /process/{name} example, the property would be $parameters.name in your script.
 
  script is a scriptblock that will be executed when the client requests the path.  The code will be routed to this scriptblock.  The scriptblock has a special variable named $parameters that will accept client parameters.  It also contains a $request special variable that contains the request info made by the client.  The $request variable can be used to read post data from the client with the following example:
 
  $data = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
 
- Here is an example webschema:
+ Here is an example of creating the webschema with the DSL:
+ $webschema = @(
+     Get  '/' { "Welcome to Flancy!" }
+     Get  '/process' { Get-Process | select name, id, path | ConvertTo-Json }
+     Post '/process' {
+             $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
+             Start-Process $processname
+     }
+     Get '/process/{name}' { get-process $parameters.name |convertto-json -depth 1 }
+     Get '/prettyprocess' { Get-Process | ConvertTo-HTML name, id, path }
+ )
+
+
+ Here is an example of the raw data that the above DSL creates.  This may also be passed to -webschema:
 
  $webschema = @(
      @{
@@ -64,17 +77,22 @@ function New-Flancy {
      }
  )
 
-
- 
-
  .Parameter Public
- This is the list of properties that will be available to the class.  This can be thought of as a Select-Object
- method defines the 
- method defines the 
- after your get- cmdlet.  Regardless of what your cmdlet returns, only the properties listed will be visible
- when viewing the objects for the class.
+ This allows you to use have your web server use a hostname other than localhost.  Assuming your firewall is configured correctly, you will be able to serve the web calls over a network. 
+
+
+ This will require admin privileges to run.  If you do not have admin privs, a prompt will ask you if you would like to elevate.  If you choose to do this, the server will have the following run as admin.  This will allow users to serve on port 8000 from this server:
+
+ netsh http urlacl add url='http://+:8000' user=everyone
+
+ If you have already run your own netsh command, it will not create a new one.  For example, if you want
+ to serve on http://server1:8000 with your service account named "flancyservice", you could run netsh as
+ follows instead of allowing New-Flancy to create a "+:8000 user=everyone" urlacl.
+
+ netsh http urlacl add url='http://server1:8000' user=flancyservice
 
  .Parameter Passthru
+ Returns the flancy object.  This is generally not needed by the other cmdlets.
 
  .Inputs
  Collection of hashes containing the schema of the web server
@@ -98,22 +116,9 @@ function New-Flancy {
 
  .Example
  New-Flancy -url http://localhost:8000 -webschema @(
-    @{
-        path = '/'
-        method = 'get'
-        script = { "Welcome to Flancy!" }
-    },@{
-        path = '/process'
-        method = 'get'
-        script = {
-            get-process |select name, id, path |ConvertTo-Json
-        }
-    },@{
-        path = '/prettyprocess'
-        method = 'get'
-        script = {
-            Get-Process |ConvertTo-HTML name, id, path
-        }
+    Get '/'              { "Welcome to Flancy!" }
+    Get '/process'       { get-process |select name, id, path |ConvertTo-Json }
+    Get '/prettyprocess' { Get-Process |ConvertTo-HTML name, id, path }
     }
  )
 
@@ -126,20 +131,11 @@ function New-Flancy {
  
  .Example
  New-Flancy -url http://localhost:8000 -webschema @(
-    @{
-       path   = '/startprocessbypost'
-       method = 'post'
-       script = { 
-           $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
-           Start-Process $processname
-        } 
-    },@{
-        path   = '/startprocessbyparameter/{name}'
-        method = 'get'
-        script = { 
-            start-process $parameters.name
-        }
-    }
+    Post '/startprocessbypost' {
+       $processname = (new-Object System.IO.StreamReader @($Request.Body, [System.Text.Encoding]::UTF8)).ReadToEnd()
+       Start-Process $processname
+    } 
+    Get '/startprocessbyparameter/{name}' { start-process $parameters.name }
  )
 
  The above illustrates how the special variables $request and $parameters can be used in a scriptblock.  The above illustrates how you can start a web server that will start processes based on either the data sent in POST to the route or by leveraging the parameters in a get route.
@@ -337,3 +333,99 @@ function Stop-Flancy {
         throw "Flancy not found.  Did you successfully run New-Flancy?"
     }
 }
+
+<#
+.Synopsis
+   Adds an endpoint to handler GET requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-GetHandler -Path "/Process" -Script { Get-Process | ConvertTo-Json } 
+.EXAMPLE
+   Get "/Process" { Get-Process | ConvertTo-Json } 
+#>
+function Add-GetHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Get";
+        Script=$Script;
+    }
+}
+
+<#
+.Synopsis
+   Adds an endpoint to handler POST requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-PostHandler -Path "/Process" -Script { Start-Process $Name } 
+.EXAMPLE
+   Post"/Process" { Start-Process $Name } 
+#>
+function Add-PostHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Post";
+        Script=$Script;
+    }
+}
+
+<#
+.Synopsis
+   Adds an endpoint to handler DELETE requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-DeleteHandler -Path "/Process/{id}" -Script { Stop-Process $Parameters.Id } 
+.EXAMPLE
+   Delete "/Process/{id}" { Stop-Process $Parameters.Id } 
+#>
+function Add-DeleteHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Delete";
+        Script=$Script;
+    }
+}
+
+
+<#
+.Synopsis
+   Adds an endpoint to handler PUT requests.
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-PutHandler -Path "/Service/{name}/{status}" -Script { Set-Service -Name $Parameters.Id -Status $Parameters.Status  } 
+.EXAMPLE
+   Put "/Service/{name}/{status}" { Set-Service -Name $Parameters.Id -Status $Parameters.Status  } 
+#>
+function Add-PutHandler {
+    param(
+    [string]$Path, 
+    [ScriptBlock]$Script)
+
+    @{
+        Path=$Path;
+        Method="Put";
+        Script=$Script;
+    }
+}
+
+New-Alias -Name Get -Value Add-GetHandler
+New-Alias -Name Put -Value Add-PutHandler
+New-Alias -Name Post -Value Add-PostHandler
+New-Alias -Name Delete -Value Add-DeleteHandler
+
+Export-ModuleMember -Alias * -function *
