@@ -19,7 +19,7 @@ function New-Flancy {
  Specifies a url/port in the form: http://servername:xxx to listen on where xxx is the port number to listen on.  When specifying localhost with the public switch activated, it will enable listening on all IP addresses.
 
  .Parameter Webschema
- Webschema takes a collection of hashes.  Each element in the hash represents a different route requested by the client.  The three values used in the hash are path, method, and script.  These hashes are abstracted by a DSL that you may use to build the hash.
+ Webschema takes a collection of hashes.  Each element in the hash represents a different route or static content requested by the client.  For routes, the three values used in the hash are path, method, and script.  These hashes are abstracted by a DSL that you may use to build the hash.  For static content, the values are path, source, and type where type can be either 'staticfile' or 'staticdirectory'
 
  method defines the HTTP method that will be used by the client to get to the route.
 
@@ -39,6 +39,8 @@ function New-Flancy {
      }
      Get '/process/{name}' { get-process $parameters.name |convertto-json -depth 1 }
      Get '/prettyprocess' { Get-Process | ConvertTo-HTML name, id, path }
+     staticfile      '/index.html' '/content/index.html'
+     staticdirectory '/content'    '/content/files'
  )
 
 
@@ -74,8 +76,22 @@ function New-Flancy {
          script = { 
              Get-Process | ConvertTo-HTML name, id, path
          }
+     },@{
+        path = '/index.html'
+        source = '/content/index.html'
+        type = 'staticfile'
+     },@{
+        path = '/content'
+        source = '/content/files'
+        type = 'staticdirectory'
      }
  )
+
+ .Parameter Path
+ This parameter runs the flancy web server in that directory. 
+ This is a useful parameter when using staticfile or staticdirectory in your webschema.
+ 
+ For example, if -path is set to c:\content, then staticfile /index.html /stuff.html would serve c:\content\stuff.html when a request is made for /index.html
 
  .Parameter Public
  This allows you to use have your web server use a hostname other than localhost.  Assuming your firewall is configured correctly, you will be able to serve the web calls over a network. 
@@ -153,7 +169,6 @@ function New-Flancy {
         [string] $url='http://localhost:8000',
         [Parameter(Mandatory=$false)]
         [ValidateScript({
-            $PropSet = 'path', 'method', 'script'
             $HttpMethods =  'Delete', 'Get', 'Head', 'Options', 'Post', 'Put', 'Patch'
 
             $_ | ForEach-Object {
@@ -161,6 +176,25 @@ function New-Flancy {
                 {
 				    throw 'One of the the supplied objects is not a dictionary.'
 			    }
+
+                if ($_.method) {
+                    $PropSet = 'path', 'method', 'script'
+                    $NonValidHttpMethods = Compare-Object -ReferenceObject $HttpMethods -DifferenceObject ($_.Method -as [array]) |
+                        Where-Object {$_.SideIndicator -eq '=>'} |
+                            Select-Object -ExpandProperty InputObject
+                    if($NonValidHttpMethods)
+                    {
+                        throw "Not valid HTTP method(s): $($NonValidHttpMethods -join ', ')"
+                    }
+                    if(!($_.Script -is [scriptblock] -or $(try{[scriptblock]::Create($_.Script)}catch{$false})))
+                    {
+                        throw "Not valid 'script' property: $($_.Script)"
+                    }
+                } else {
+                    # Currently only other values are staticfile/staticdirectory
+                    # Can add more validation if we want to here
+                    $PropSet = 'path', 'type', 'source'
+                }
 
                 $MissingProps = Compare-Object -ReferenceObject $PropSet -DifferenceObject ($_.Keys -as [array]) |
                     Where-Object {$_.SideIndicator -eq '<='} |
@@ -184,13 +218,6 @@ function New-Flancy {
                     }
                 }
 
-                $NonValidHttpMethods = Compare-Object -ReferenceObject $HttpMethods -DifferenceObject ($_.Method -as [array]) |
-                    Where-Object {$_.SideIndicator -eq '=>'} |
-                        Select-Object -ExpandProperty InputObject
-                if($NonValidHttpMethods)
-                {
-                    throw "Not valid HTTP method(s): $($NonValidHttpMethods -join ', ')"
-                }
 
                 $ValidUri = $_.Path -as [System.URI]
                 if(!($ValidUri -and !$ValidUri.IsAbsoluteUri))
@@ -198,18 +225,28 @@ function New-Flancy {
                     throw "Not valid 'path' property: $($_.Path)"
                 }
 
-                if(!($_.Script -is [scriptblock] -or $(try{[scriptblock]::Create($_.Script)}catch{$false})))
-                {
-                    throw "Not valid 'script' property: $($_.Script)"
-                }
             }
             $true
         })]
         [ValidateNotNullOrEmpty()]
         [object[]] $webschema = @(@{path='/';method='Get';script = {"Hello World!"}}),
         [switch] $Passthru,
-        [switch] $Public
+        [switch] $Public,
+        [Parameter(Mandatory=$false)]
+        [string] $Path
     )
+    if (!$path) {
+        $path = ''
+        if ($MyInvocation.MyCommand.Path) {
+            $path = Split-Path $MyInvocation.MyCommand.Path
+        } else {
+            $path = $pwd -replace '^\S+::',''
+        }
+    }
+    if (!(Test-Path $path)) {
+        throw "The path to start from does not exist"
+        break
+    }
     if ($SCRIPT:flancy) {
         throw "A flancy already exists.  To create a new one, you must restart your PowerShell session"
         break
@@ -239,6 +276,7 @@ using System.Management.Automation;
 using Nancy;
 using Nancy.Hosting.Self;
 using Nancy.Extensions;
+using Nancy.Conventions;
 
 namespace Flancy {
     public class Module : NancyModule
@@ -250,7 +288,7 @@ namespace Flancy {
 
 "@
     $routes = ''
-    foreach ($entry in $webschema) {
+    foreach ($entry in ($webschema |?{$_.method})) {
         $method = (Get-Culture).TextInfo.ToTitleCase($entry.method)
         if ($entry.parameters) {
             $routes += "`r`n            $method[`"$($entry.path)`"] = parameters => "
@@ -267,12 +305,63 @@ namespace Flancy {
 
         }
     }
+"@
+    $code += @"
+    public class CustomRootPathProvider : IRootPathProvider
+    {
+        public string GetRootPath()
+        {
+            return @"$path";
+        }
+    }
+
+"@
+    $code += @"
+
+    public class CustomBootstrapper : DefaultNancyBootstrapper
+    {
+        protected override IRootPathProvider RootPathProvider
+        {
+            get {return new CustomRootPathProvider();}
+        }
+        protected override void ConfigureConventions(NancyConventions conventions)
+        {
+            base.ConfigureConventions(conventions);
+
+"@
+    $staticroutes = $webschema |?{$_.type -match 'static(file|directory)'}
+    foreach ($entry in $staticroutes) {
+        switch ($entry.type) {
+            'staticfile' {
+                $code += 'conventions.StaticContentsConventions.AddFile("{0}", "{1}");' -f $entry.path, $entry.source
+                $code += "`r`n"
+                break
+            }
+            'staticdirectory' {
+                $code += 'conventions.StaticContentsConventions.AddDirectory("{0}", "{1}");' -f $entry.path, $entry.source
+                $code += "`r`n"
+                break
+            }
+            default {
+                Write-Verbose "Unknown entry type - not staticfile nor staticdir: $($entry.type)"
+            }
+        }
+    }
+    $code += @"
+        }
+    }
+
+"@
+
+    $code+=@"
+
     public class Flancy 
     {
         private NancyHost host;
         private Uri uri;
         public Flancy(string url) {
             var config = new HostConfiguration();
+
 "@
     if ($Public) {
         $code+= "config.UrlReservations.CreateAutomatically = true;`r`n"
@@ -283,6 +372,7 @@ namespace Flancy {
         $code += "config.UrlReservations.User = System.Security.Principal.WindowsIdentity.GetCurrent().Name;`r`n"
     }
     $code += @"
+
             uri = new Uri(url);
             this.host = new NancyHost(config, uri);
         }
@@ -294,6 +384,7 @@ namespace Flancy {
         }
     }
 }
+
 "@ 
 
     Write-Debug $code
@@ -423,9 +514,58 @@ function Add-PutHandler {
     }
 }
 
+<#
+.Synopsis
+   Adds a link to a static file
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-StaticFileHandler -Path "/index.html" -Source "/files/index.html"
+#>
+function Add-StaticFileHandler {
+    param(
+    [Parameter(Mandatory=$true, Position=0)]
+    [string]$Path, 
+    [Parameter(Mandatory=$true, Position=1)]
+    [string]$Source)
+
+    @{
+        Type='StaticFile'
+        Path=$Path
+        Source=$Source
+    }
+}
+
+<#
+.Synopsis
+   Adds a link to a static content in a directory
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Add-StaticDirectoryHandler -Path "/images" -Source "/files/images"
+#>
+function Add-StaticDirectoryHandler {
+    param(
+    [Parameter(Mandatory=$true, Position=0)]
+    [string]$Path, 
+    [Parameter(Mandatory=$true, Position=1)]
+    [string]$Source)
+
+    @{
+        Type='StaticDirectory'
+        Path=$Path
+        Source=$Source
+    }
+}
 New-Alias -Name Get -Value Add-GetHandler
 New-Alias -Name Put -Value Add-PutHandler
 New-Alias -Name Post -Value Add-PostHandler
 New-Alias -Name Delete -Value Add-DeleteHandler
+New-Alias -Name StaticFile -Value Add-StaticFileHandler
+New-Alias -Name StaticDirectory -Value Add-StaticDirectoryHandler
 
-Export-ModuleMember -Alias * -function *
+Export-ModuleMember -Alias get, put, post, delete, staticfile, staticdirectory `
+                    -Function New-Flancy, Add-GetHandler, Add-PutHandler, Add-PostHandler,`
+                     Add-DeleteHandler, Add-StaticFileHandler, Add-StaticDirectoryHandler,`
+                     Stop-Flancy, Start-Flancy, Get-Flancy
+
