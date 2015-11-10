@@ -27,6 +27,14 @@ Describe "Flancy web schema validator tests" {
     It "Should throw an error when calling New-Flancy with the custom web schema, when it contains invalid 'method'" {
         {New-Flancy -WebSchema @{Path = '/' ; Method = 'Foo' ; Script = {"Hello World!"}}} | Should Throw
     }
+    It "Should throw an error when calling New-Flancy with a web schema containing StaticFile, but missing source or path" {
+        {New-Flancy -WebSchema @{Type='StaticFile'; source='/index.html'}} |should throw
+        {New-Flancy -WebSchema @{Type='StaticFile'; path='/index.html'}} |should throw
+    }
+    It "Should throw an error when calling New-Flancy with a web schema containing StaticDirectory, but missing source or path" {
+        {New-Flancy -WebSchema @{Type='StaticDirectory'; source='/blah'}} |should throw
+        {New-Flancy -WebSchema @{Type='StaticDirectory'; path='/index.html'}} |should throw
+    }
     It "Should throw an error when calling New-Flancy with the custom web schema, when its 'script' is not a scriptblock or can't be created from a supplied string" {
         {New-Flancy -WebSchema @{Path = '/' ; Method = 'Get' ; Script = '~!@#$%^&*()_+'}} | Should Throw
     }
@@ -65,7 +73,20 @@ Describe "The DSL should create the same hash elements that can be used by websc
         $testdsl.path   |should be '/'
         $testdsl.script |should be $script
     }
+    It 'Translates StaticFile appropriately' {
+        $testdsl = StaticFile '/index.html' '/files/index.html'
+        $testdsl.path |should be '/index.html'
+        $testdsl.type |should be 'staticfile'
+        $testdsl.source |should be '/files/index.html'
+    }
+    It 'Translates StaticDirectory appropriately' {
+        $testdsl = StaticDirectory '/target' '/files/source'
+        $testdsl.path |should be '/target'
+        $testdsl.type |should be 'staticdirectory'
+        $testdsl.source |should be '/files/source'
+    }
 }
+
 $webschema = @(
     Get '/' {
         "Welcome to Flancy!"
@@ -81,11 +102,13 @@ $webschema = @(
             $command = $parameters.name
             Get-command $command |select name, noun, verb |convertto-json
     }
+    StaticFile '/data.html' 'content/data.html'
+    StaticDirectory '/files' 'content/'
 )
 
 Describe "Localhost web requests against Flancy schema" {
     It "Should not throw an error when calling New-Flancy with the custom web schema" {
-        {New-Flancy -url http://localhost:8001 -webschema $webschema} |should not throw
+        {New-Flancy -url http://localhost:8001 -webschema $webschema -path $here} |should not throw
     }
     It "Returns the data supplied in the schema from a GET request to /" {
         Invoke-RestMethod http://localhost:8001 |Should Be "Welcome to Flancy!"
@@ -112,6 +135,15 @@ Describe "Localhost web requests against Flancy schema" {
         $data = Invoke-RestMethod -Uri http://localhost:8001/commandfromparameter/Set-Item -Headers @{'Accept'='application/json'}
         $data.verb |should be set 
         $data.noun |should be item
+    }
+    It "Serves static content files appropriately" {
+        $staticfile = join-path $here "content/data.html"
+        "success" |out-file -encoding ASCII $staticfile
+        Invoke-RestMethod -Uri http://localhost:8001/data.html |should be "success`r`n"
+    }
+    It "Serves static content directories appropriately" {
+        # leverages content created for static files in last test
+        Invoke-RestMethod -Uri http://localhost:8001/files/data.html |should be "success`r`n"
     }
 }
 
