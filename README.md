@@ -1,4 +1,6 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/765hkbmm62j16li3?svg=true)](https://ci.appveyor.com/project/toenuff/flancy)
+Master: [![Build status](https://ci.appveyor.com/api/projects/status/765hkbmm62j16li3?branch=master&svg=true)](https://ci.appveyor.com/project/toenuff/flancy)
+Devel: [![Build status](https://ci.appveyor.com/api/projects/status/765hkbmm62j16li3?branch=devel&svg=true)](https://ci.appveyor.com/project/toenuff/flancy)
+Last Build (Any branch): [![Build status](https://ci.appveyor.com/api/projects/status/765hkbmm62j16li3?svg=true)](https://ci.appveyor.com/project/toenuff/flancy)
 
 # Flancy - A web microframework for Windows PowerShell
 

@@ -93,6 +93,10 @@ function New-Flancy {
  
  For example, if -path is set to c:\content, then staticfile /index.html /stuff.html would serve c:\content\stuff.html when a request is made for /index.html
 
+ By default, flancy will set Path to be your current directory.
+
+ Path should either be an empty directory or a directory serving up static content.  You will receive an access denied error if you try to use a Path that has hidden directories or links that would give you an error if you ran get-childitem -force.  For example, this is common in c:\users\username\documents or root drives such as c:\ or d:\.  Note: By default when running flancy in a job, you will see this error because jobs start in c:\users\username\documents.  You must use the -Path parameter to get around this error when running Flancy in a job.
+
  .Parameter Public
  This allows you to use have your web server use a hostname other than localhost.  Assuming your firewall is configured correctly, you will be able to serve the web calls over a network. 
 
@@ -246,6 +250,14 @@ function New-Flancy {
     if (!(Test-Path $path)) {
         throw "The path to start from does not exist"
         break
+    }
+    try {
+        Get-ChildItem $path -Depth 1 -force -Recurse -ea stop |out-null
+    } catch [System.UnauthorizedAccessException] {
+        $e = "Access denied to {0}`r`n" -f $_.targetobject
+        $e += "You must select a starting path with -Path where you have access to all subfolders (including hidden directories and linked directories)`r`n"
+        $e += "The Path should be set to a folder with only subfolders and files that may be served up by Flancy "
+        throw $e
     }
     if ($SCRIPT:flancy) {
         throw "A flancy already exists.  To create a new one, you must restart your PowerShell session"
