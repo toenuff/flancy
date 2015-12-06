@@ -255,7 +255,7 @@ function New-Flancy {
         Write-Verbose "Testing for access denied errors in $Path subfolders"
         foreach ($item in (Get-ChildItem $Path -Force -ea stop)) {
             if ($item.psiscontainer) {
-                Get-ChildItem $item.fullname -Force -ea stop
+                Get-ChildItem $item.fullname -Force -ea stop | Out-Null
             }
         }
     } catch [System.UnauthorizedAccessException] {
