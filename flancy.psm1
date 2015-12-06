@@ -390,7 +390,20 @@ namespace Flancy {
     Write-Debug $code
 
     add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
-    $flancy = new-object "flancy.flancy" -argumentlist $url
+    try {
+        $flancy = new-object "flancy.flancy" -argumentlist $url
+    } catch {
+        function Unwind-Exception {
+            Param($Exception)
+
+            if($Exception.InnerException) {
+                $Exception.InnerException.PsObject.Properties | Select-Object -Property Name, Value
+                Unwind-Exception $Exception.InnerException
+            }
+        }
+
+        Unwind-Exception $_.Exception.InnerException
+    }
     try {
         $flancy.start()
         if ($flancy) {
