@@ -413,13 +413,21 @@ namespace Flancy {
         function Unwind-Exception {
             Param($Exception)
 
-            if($Exception.InnerException) {
-                $Exception.InnerException.PsObject.Properties | Select-Object -Property Name, Value
+            Write-Error -Exception $Exception
+            $Exception.PsObject.Properties |
+                Select-Object -Property Name, Value |
+                    ForEach-Object {
+                        $_.Name, "$($_.Value)", [System.Environment]::NewLine | Write-Verbose 
+                    }
+
+            if($Exception.InnerException)
+            {
                 Unwind-Exception $Exception.InnerException
             }
         }
 
         Unwind-Exception $_.Exception.InnerException
+        throw "Can't create Flancy! Examine exceptions above or run 'New-Flancy' with '-Verbose' switch to get more details."
     }
     try {
         $flancy.start()
