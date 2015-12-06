@@ -252,7 +252,12 @@ function New-Flancy {
         break
     }
     try {
-        Get-ChildItem $path -Depth 1 -force -Recurse -ea stop |out-null
+        Write-Verbose "Testing for access denied errors in $Path subfolders"
+        foreach ($item in (Get-ChildItem $Path -Force -ea stop)) {
+            if ($item.psiscontainer) {
+                Get-ChildItem $item.fullname -Force -ea stop
+            }
+        }
     } catch [System.UnauthorizedAccessException] {
         $e = "Access denied to {0}`r`n" -f $_.targetobject
         $e += "You must select a starting path with -Path where you have access to all subfolders (including hidden directories and linked directories)`r`n"
