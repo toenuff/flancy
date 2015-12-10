@@ -240,29 +240,13 @@ function New-Flancy {
         [string] $Path
     )
     if (!$path) {
-        $path = ''
-        if ($MyInvocation.MyCommand.Path) {
-            $path = Split-Path $MyInvocation.MyCommand.Path
-        } else {
-            $path = $pwd -replace '^\S+::',''
+        $path = join-path ([System.io.path]::gettemppath()) "flancy"
+        if (!(Test-Path $path)) {
+            mkdir $path |out-null
         }
-    }
-    if (!(Test-Path $path)) {
+    } elseif (!(Test-Path $path)) {
         throw "The path to start from does not exist"
         break
-    }
-    try {
-        Write-Verbose "Testing for access denied errors in $Path subfolders"
-        foreach ($item in (Get-ChildItem $Path -Force -ea stop)) {
-            if ($item.psiscontainer) {
-                Get-ChildItem $item.fullname -Force -ea stop
-            }
-        }
-    } catch [System.UnauthorizedAccessException] {
-        $e = "Access denied to {0}`r`n" -f $_.targetobject
-        $e += "You must select a starting path with -Path where you have access to all subfolders (including hidden directories and linked directories)`r`n"
-        $e += "The Path should be set to a folder with only subfolders and files that may be served up by Flancy "
-        throw $e
     }
     if ($SCRIPT:flancy) {
         throw "A flancy already exists.  To create a new one, you must restart your PowerShell session"
@@ -406,19 +390,23 @@ namespace Flancy {
 
     Write-Debug $code
 
-    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
     try {
+        add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
         $flancy = new-object "flancy.flancy" -argumentlist $url
     } catch {
+        if ($_.FullyQualifiedErrorId -match 'TYPE_ALREADY_EXISTS') {
+            Write-Error "Flancy definition already exists.  You need to create a new PowerShell session in order to create a new definition"
+            throw $_.exception
+        }
         function Unwind-Exception {
             Param($Exception)
 
             Write-Error -Exception $Exception
-            $Exception.PsObject.Properties |
-                Select-Object -Property Name, Value |
-                    ForEach-Object {
+            if ($VerbosePreference -ne 'silentlycontinue') {
+                $Exception.PsObject.Properties | ForEach-Object {
                         $_.Name, "$($_.Value)", [System.Environment]::NewLine | Write-Verbose 
-                    }
+                }
+            }
 
             if($Exception.InnerException)
             {
@@ -426,6 +414,12 @@ namespace Flancy {
             }
         }
 
+        if ($_.Exception.InnerException.InnerException.InnerException.Message -match 'access to') {
+            write-error "Access denied error.  Make sure you are using the -Path parameter to point to a directory where you have complete control and no hidden directories"
+            throw $_.Exception.InnerException.InnerException.InnerException.Message
+        }
+
+        $_.Exception.InnerException.InnerException.InnerException |select *
         Unwind-Exception $_.Exception.InnerException
         throw "Can't create Flancy! Examine exceptions above or run 'New-Flancy' with '-Verbose' switch to get more details."
     }
