@@ -361,31 +361,31 @@ namespace Flancy {
         private NancyHost host;
         private Uri uri;
 
-		private string _CodeBehind, _nancyDLL, _nancySelfDLL, _URL, _Path;
-		private Object _Webschema, _StaticRoutes;
-		private bool _Public;
+        private string _CodeBehind, _nancyDLL, _nancySelfDLL, _URL, _Path;
+        private Object _Webschema, _StaticRoutes;
+        private bool _Public;
 
-		// Set Read-Only properties in order of appearance when viewing the object
-		public string NancyDLLPath		{get {return this._nancyDLL;}}
-		public string NancySelfDLLPath	{get {return this._nancySelfDLL;}}
-		public Object Webschema			{get {return this._Webschema;}}
-		public Object StaticRoutes		{get {return this._StaticRoutes;}}
-		public string Code				{get {return this._CodeBehind;}}
-		public string URL				{get {return this._URL;}}
-		public string Path				{get {return this._Path;}}
-		public bool PublicServer		{get {return this._Public;}}
-		
+        // Set Read-Only properties in order of appearance when viewing the object
+        public string NancyDLLPath      {get {return this._nancyDLL;}}
+        public string NancySelfDLLPath  {get {return this._nancySelfDLL;}}
+        public Object Webschema         {get {return this._Webschema;}}
+        public Object StaticRoutes      {get {return this._StaticRoutes;}}
+        public string Code              {get {return this._CodeBehind;}}
+        public string URL               {get {return this._URL;}}
+        public string Path              {get {return this._Path;}}
+        public bool PublicServer        {get {return this._Public;}}
+
         public Flancy(string url, string nancydll, string nancyselfdll, Object webschema, string path, Object staticroutes, string codebehind, bool ispublic) {
             var config = new HostConfiguration();
 
 "@
     if ($Public) {
-        $code+= "`t`t`tconfig.UrlReservations.CreateAutomatically = true;`r`n"
+        $code+= " "*12 + "config.UrlReservations.CreateAutomatically = true;`r`n"
 
     }
     else {
-        $code+= "`t`t`tconfig.RewriteLocalhost = false;`r`n"
-        $code += "`t`t`tconfig.UrlReservations.User = System.Security.Principal.WindowsIdentity.GetCurrent().Name;`r`n"
+        $code+= " "*12 + "config.RewriteLocalhost = false;`r`n"
+        $code += " "*12 + "config.UrlReservations.User = System.Security.Principal.WindowsIdentity.GetCurrent().Name;`r`n"
     }
     $code += @"
 
@@ -399,7 +399,6 @@ namespace Flancy {
             this._StaticRoutes = staticroutes;
             this._CodeBehind = codebehind;
             this._Public = ispublic;
-			
         }
         public void Start() {
             this.host.Start();
