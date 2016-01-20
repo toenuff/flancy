@@ -93,6 +93,10 @@ function New-Flancy {
  
  For example, if -path is set to c:\content, then staticfile /index.html /stuff.html would serve c:\content\stuff.html when a request is made for /index.html
 
+ By default, flancy will set Path to be your current directory.
+
+ Path should either be an empty directory or a directory serving up static content.  You will receive an access denied error if you try to use a Path that has hidden directories or links that would give you an error if you ran get-childitem -force.  For example, this is common in c:\users\username\documents or root drives such as c:\ or d:\.  Note: By default when running flancy in a job, you will see this error because jobs start in c:\users\username\documents.  You must use the -Path parameter to get around this error when running Flancy in a job.
+
  .Parameter Public
  This allows you to use have your web server use a hostname other than localhost.  Assuming your firewall is configured correctly, you will be able to serve the web calls over a network. 
 
@@ -236,14 +240,11 @@ function New-Flancy {
         [string] $Path
     )
     if (!$path) {
-        $path = ''
-        if ($MyInvocation.MyCommand.Path) {
-            $path = Split-Path $MyInvocation.MyCommand.Path
-        } else {
-            $path = $pwd -replace '^\S+::',''
+        $path = join-path ([System.io.path]::gettemppath()) "flancy"
+        if (!(Test-Path $path)) {
+            mkdir $path |out-null
         }
-    }
-    if (!(Test-Path $path)) {
+    } elseif (!(Test-Path $path)) {
         throw "The path to start from does not exist"
         break
     }
@@ -359,22 +360,45 @@ namespace Flancy {
     {
         private NancyHost host;
         private Uri uri;
-        public Flancy(string url) {
+
+        private string _CodeBehind, _nancyDLL, _nancySelfDLL, _URL, _Path;
+        private Object _Webschema, _StaticRoutes;
+        private bool _Public;
+
+        // Set Read-Only properties in order of appearance when viewing the object
+        public string NancyDLLPath      {get {return this._nancyDLL;}}
+        public string NancySelfDLLPath  {get {return this._nancySelfDLL;}}
+        public Object Webschema         {get {return this._Webschema;}}
+        public Object StaticRoutes      {get {return this._StaticRoutes;}}
+        public string Code              {get {return this._CodeBehind;}}
+        public string URL               {get {return this._URL;}}
+        public string Path              {get {return this._Path;}}
+        public bool PublicServer        {get {return this._Public;}}
+
+        public Flancy(string url, string nancydll, string nancyselfdll, Object webschema, string path, Object staticroutes, string codebehind, bool ispublic) {
             var config = new HostConfiguration();
 
 "@
     if ($Public) {
-        $code+= "config.UrlReservations.CreateAutomatically = true;`r`n"
+        $code+= " "*12 + "config.UrlReservations.CreateAutomatically = true;`r`n"
 
     }
     else {
-        $code+= "config.RewriteLocalhost = false;`r`n"
-        $code += "config.UrlReservations.User = System.Security.Principal.WindowsIdentity.GetCurrent().Name;`r`n"
+        $code+= " "*12 + "config.RewriteLocalhost = false;`r`n"
+        $code += " "*12 + "config.UrlReservations.User = System.Security.Principal.WindowsIdentity.GetCurrent().Name;`r`n"
     }
     $code += @"
 
             uri = new Uri(url);
             this.host = new NancyHost(config, uri);
+            this._nancyDLL = nancydll;
+            this._nancySelfDLL = nancyselfdll;
+            this._URL = url;
+            this._Webschema = webschema;
+            this._Path = path;
+            this._StaticRoutes = staticroutes;
+            this._CodeBehind = codebehind;
+            this._Public = ispublic;
         }
         public void Start() {
             this.host.Start();
@@ -389,8 +413,39 @@ namespace Flancy {
 
     Write-Debug $code
 
-    add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
-    $flancy = new-object "flancy.flancy" -argumentlist $url
+    try {
+        add-type -typedefinition $code -referencedassemblies @($nancydll, $nancyselfdll, $MicrosoftCSharp)
+        $flancy = new-object "flancy.flancy" -argumentlist $url, $nancydll, $nancyselfdll, $webschema, $Path, $staticroutes, $code, $Public
+    } catch {
+        if ($_.FullyQualifiedErrorId -match 'TYPE_ALREADY_EXISTS') {
+            Write-Error "Flancy definition already exists.  You need to create a new PowerShell session in order to create a new definition"
+            throw $_.exception
+        }
+        function Unwind-Exception {
+            Param($Exception)
+
+            Write-Error -Exception $Exception
+            if ($VerbosePreference -ne 'silentlycontinue') {
+                $Exception.PsObject.Properties | ForEach-Object {
+                        $_.Name, "$($_.Value)", [System.Environment]::NewLine | Write-Verbose 
+                }
+            }
+
+            if($Exception.InnerException)
+            {
+                Unwind-Exception $Exception.InnerException
+            }
+        }
+
+        if ($_.Exception.InnerException.InnerException.InnerException.Message -match 'access to') {
+            write-error "Access denied error.  Make sure you are using the -Path parameter to point to a directory where you have complete control and no hidden directories"
+            throw $_.Exception.InnerException.InnerException.InnerException.Message
+        }
+
+        $_.Exception.InnerException.InnerException.InnerException |select *
+        Unwind-Exception $_.Exception.InnerException
+        throw "Can't create Flancy! Examine exceptions above or run 'New-Flancy' with '-Verbose' switch to get more details."
+    }
     try {
         $flancy.start()
         if ($flancy) {
